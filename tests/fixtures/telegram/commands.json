@@ -1,0 +1,236 @@
+[
+  {
+    "update_id": 500010,
+    "message": {
+      "message_id": 20,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/start",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 6,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500011,
+    "message": {
+      "message_id": 21,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/abi",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 4,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500012,
+    "message": {
+      "message_id": 22,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/otsingud",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 9,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500013,
+    "message": {
+      "message_id": 23,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/peata 1",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 6,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500014,
+    "message": {
+      "message_id": 24,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/jätka 1",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 6,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500015,
+    "message": {
+      "message_id": 25,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/kustuta 1",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 8,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500016,
+    "message": {
+      "message_id": 26,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/kinnita",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 8,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500017,
+    "message": {
+      "message_id": 27,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/miks",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 5,
+          "type": "bot_command"
+        }
+      ]
+    }
+  },
+  {
+    "update_id": 500018,
+    "message": {
+      "message_id": 28,
+      "from": {
+        "id": 1001,
+        "is_bot": false,
+        "first_name": "Test",
+        "language_code": "et"
+      },
+      "chat": {
+        "id": 1001,
+        "first_name": "Test",
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "/miks 1",
+      "entities": [
+        {
+          "offset": 0,
+          "length": 5,
+          "type": "bot_command"
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "update_id": 500004,
+  "message": {
+    "message_id": 5,
+    "from": {
+      "id": 9999,
+      "is_bot": false,
+      "first_name": "Võõras",
+      "username": "v66ras"
+    },
+    "chat": {
+      "id": 9999,
+      "first_name": "Võõras",
+      "type": "private"
+    },
+    "date": 1795000000,
+    "text": "tere"
+  }
+}

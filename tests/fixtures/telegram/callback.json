@@ -1,0 +1,27 @@
+{
+  "update_id": 500003,
+  "callback_query": {
+    "id": "4382bfdwdsb323b2d9",
+    "from": {
+      "id": 1001,
+      "is_bot": false,
+      "first_name": "Test"
+    },
+    "message": {
+      "message_id": 501,
+      "from": {
+        "id": 7000000001,
+        "is_bot": true,
+        "first_name": "khe-deals"
+      },
+      "chat": {
+        "id": 1001,
+        "type": "private"
+      },
+      "date": 1795000000,
+      "text": "..."
+    },
+    "chat_instance": "-1234567890",
+    "data": "h:1"
+  }
+}

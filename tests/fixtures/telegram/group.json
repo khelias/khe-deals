@@ -1,0 +1,18 @@
+{
+  "update_id": 500005,
+  "message": {
+    "message_id": 6,
+    "from": {
+      "id": 1001,
+      "is_bot": false,
+      "first_name": "Test"
+    },
+    "chat": {
+      "id": -100123,
+      "title": "Grupp",
+      "type": "supergroup"
+    },
+    "date": 1795000000,
+    "text": "/otsingud"
+  }
+}

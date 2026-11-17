@@ -1,0 +1,19 @@
+{
+  "update_id": 500001,
+  "message": {
+    "message_id": 11,
+    "from": {
+      "id": 1001,
+      "is_bot": false,
+      "first_name": "Test",
+      "language_code": "et"
+    },
+    "chat": {
+      "id": 1001,
+      "first_name": "Test",
+      "type": "private"
+    },
+    "date": 1795000000,
+    "text": "otsi beebikäru alla 150 eur"
+  }
+}

@@ -1,0 +1,120 @@
+# khe-deals
+
+Workspace-wide rules (push, review, docs, estate ADRs) are in [khe-workspace
+`AGENTS.md`](https://github.com/khelias/khe-workspace/blob/main/AGENTS.md).
+
+The family deal alerts: an unattended job in GitHub Actions under
+[estate ADR-039](https://github.com/khelias/khe-architecture/blob/main/decisions/039-family-deal-alerts-are-an-unattended-job.md),
+inside
+[estate ADR-027](https://github.com/khelias/khe-architecture/blob/main/decisions/027-attended-and-unattended-agent-tiers.md)
+points 4-6. It is a writer in the register (estate ADR-007); its envelope
+and fallback are in ADR-039 and in the header of `deals.yml`.
+
+## Commands
+
+- `npm ci`, then `npm run check`: eslint, `tsc --noEmit`, `node --test`.
+  The workspace commit gate runs it; CI runs it and actionlint as `ci`, the
+  required check on `main`.
+- `npm run check:watches <dir>`: validates a directory of watch files, e.g.
+  `../khe-deals-watches/watches`. The only check khe-deals-watches has.
+- Local runs from a checkout with `STATE_KEY` set (any 32 bytes in base64
+  for a local state): `node src/collect.ts --data ../khe-deals-watches
+  --no-telegram --any-hour` reads the live forum into `work/` and `state/`;
+  `node src/act.ts --dry-run` prints what act would send and write, with
+  hand-written `work/verdicts-<owner>.sealed` and
+  `work/answers-<owner>.sealed` (`node src/box.ts seal <in> <out>`).
+  `--no-telegram` reads no messages, so to see command answers and
+  proposals, open `work/act.sealed`, add events and `talkSenders`, and seal
+  it again. `TELEGRAM_CHATS` is needed by act, dry run included;
+  `PII_RULES` (the workspace's `.claude/hooks/pii-rules.toml`) turns the
+  gitleaks scan on in a dry run. On agent-vm the sandbox allows the two
+  Hinnavaatlus hosts, and Node's `fetch` reaches them through the sandbox
+  proxy only with `NODE_USE_ENV_PROXY=1`.
+
+## Code
+
+TypeScript run by Node 24's type stripping: `erasableSyntaxOnly`, so no
+enums, namespaces or parameter properties, and imports name the `.ts`
+file. No runtime dependencies (built-in `fetch`, `node:crypto`,
+`node:test`); TypeScript 6 currently, as typescript-eslint supports
+TypeScript below 6.1.
+
+- `src/collect.ts`: the run every ten minutes, no model. Telegram
+  updates, the forum (`src/sources/`), the keyword prefilter
+  (`src/prefilter.ts`), and the outputs that decide which jobs run.
+- `src/act.ts`: every write, no model. Alerts, commands, answers,
+  proposals, button presses, the weekly overview, price and feedback
+  lines in khe-deals-watches, the failure alert. Every text it sends is in
+  `src/messages.ts`.
+- `src/verdicts.ts`: the schemas of the two model files; `src/scan.ts`
+  strips links off the two Hinnavaatlus hosts and runs gitleaks.
+- `src/state.ts` (capped lists), `src/box.ts` (AES-256-GCM sealing),
+  `src/time.ts` (Tallinn hours, judge slots, the overview week),
+  `src/watches.ts` (the watch schema), `src/work.ts` (what passes between
+  jobs).
+- `.github/agent/judge.md` and `talk.md`: the prompts.
+
+A source is a module behind `Source` in `src/sources/source.ts`; a new one
+joins only with its own terms and robots check, recorded in its plan
+(ADR-039 point 7). The Hinnavaatlus module reads the guest SmartFeed and
+the first list page of each forum with an unseen item, so a quiet run
+makes one request; the requests per run are capped at ten, two seconds
+apart, User-Agent `khe-deals/0.1`. The forum table (ids, names, what each
+holds) is in `src/sources/hinnavaatlus.ts` and nowhere else in code.
+
+## The workflow
+
+`deals.yml` runs at minute 3 of every ten from 03 to 21 UTC; the exact
+collection hours (06-23 Tallinn) and the judge slots (the first run from
+07, 12, 17 and 21) are kept in code. Jobs:
+
+- `collect` (environment `collect`: `WATCHES_READ_TOKEN`,
+  `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHATS`, `STATE_KEY`): restores the newest
+  `state-*` cache entry, reads, and saves the state itself when nothing
+  else runs.
+- `judge` and `talk` (environment `agent`: `CLAUDE_CODE_OAUTH_TOKEN`,
+  `STATE_KEY`): Claude with no Bash, edits to its one output file, fetches
+  to the two Hinnavaatlus hosts and debug logging off (it would print the
+  conversation). Both run once per owner and open only that owner's input,
+  so one family member's watches and messages never share a model context
+  with the other's; act counts a judge's verdicts only on its own owner's
+  watches.
+- `act` (environment `telegram`: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHATS`,
+  `WATCHES_WRITE_TOKEN`, `STATE_KEY`): checks and writes, then saves the
+  state; it records each send and command in the state before making it,
+  and on "Re-run failed jobs" starts from the state its earlier attempt
+  saved.
+- `failed`: tells the operator, at most once a day.
+
+All three environments are limited to `main`. `TELEGRAM_CHATS` is
+`{"operator": "<chat id>", "partner": "<chat id>"}`; owners are keys,
+never names.
+
+Logs are public: no step prints listing, message or model text, and an
+error prints its own message only (`src/log.ts`). Keep it so.
+
+`workflow_dispatch` with `dry_run` (the default) prints counts instead of
+sending; `dry_run=false` is a normal run at any hour, and the first one
+seeds the state (everything seen, nothing alerted).
+
+## Operating
+
+- **Adding a watch by hand:** write `watches/<owner>-<slug>.json` in
+  khe-deals-watches (fields in its `AGENTS.md`), run `npm run
+  check:watches` on it here, commit and push there. The bot reads it at the
+  next run.
+- **Tokens expire:** the two fine-grained watch tokens have an expiry date
+  in the operator's calendar; when one lapses, collect or act fails and the
+  failure alert arrives. Make a new token with the same scope and replace
+  the secret. The Claude token from `claude setup-token` is revoked in
+  claude.ai settings.
+- **Renovate** opens pull requests and merges nothing itself: the
+  workflow's jobs hold the bot, Claude and watch tokens, so an action
+  update is read and merged by hand like any workflow diff.
+- **The 60-day rule:** GitHub disables a public repo's schedule after 60
+  days without activity, and emails the owner first. Merging Renovate's
+  pull requests keeps it active; if it stops anyway, enable the workflow
+  again in the Actions tab.
+- **Fallback:** disable the workflow; revoke the bot in BotFather, the
+  Claude token and both watch tokens; revert watch commits in
+  khe-deals-watches.

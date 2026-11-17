@@ -1,0 +1,426 @@
+name: Deals
+
+# The unattended job of estate ADR-039, inside ADR-027 points 4-6.
+# collect (no model) reads Telegram and the forum and decides what runs;
+# judge and talk run Claude with a read-only token, no Bash, file edits to
+# their one output file and fetches only to the two Hinnavaatlus hosts;
+# act (no model) checks their files and makes every write. What the family
+# wrote crosses jobs sealed with STATE_KEY, and no step prints it.
+# Action pins as in khe-homelab's weekly-digest.yml. No job installs
+# packages: the code runs on Node 24 alone.
+# Fallback: disable this workflow; revoke the bot (BotFather), the Claude
+# token and both watch tokens; revert watch commits in khe-deals-watches.
+
+on:
+  schedule:
+    # 03-21 UTC covers 06-23 Tallinn in both summer and winter time; the exact
+    # collection hours are kept in code.
+    - cron: '3-59/10 3-21 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Print instead of sending and writing; the log shows counts only
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: deals
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: collect
+    permissions:
+      contents: read
+    outputs:
+      judges: ${{ steps.collect.outputs.judges }}
+      senders: ${{ steps.collect.outputs.senders }}
+      act_now: ${{ steps.collect.outputs.act_now }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Checkout khe-deals-watches
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: khelias/khe-deals-watches
+          token: ${{ secrets.WATCHES_READ_TOKEN }}
+          path: .watches
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+
+      - name: Restore the state
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: state
+          key: state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: state-
+
+      - name: Collect
+        id: collect
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHATS: ${{ secrets.TELEGRAM_CHATS }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          args=(--data .watches)
+          if [ "$EVENT" = workflow_dispatch ]; then args+=(--any-hour); fi
+          node src/collect.ts "${args[@]}"
+
+      - name: Upload the state and act's input
+        if: steps.collect.outputs.act_now == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: collect
+          path: |
+            state/state.sealed
+            work/act.sealed
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload the judges' input
+        if: steps.collect.outputs.judges != '[]'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: judge-input
+          path: work/judge-*.sealed
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload the senders' input
+        if: steps.collect.outputs.senders != '[]'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: talk-input
+          path: work/talk-*.sealed
+          if-no-files-found: error
+          retention-days: 1
+
+      # When nothing else runs, collect keeps its own state.
+      - name: Save the state
+        if: steps.collect.outputs.collected == 'true' && steps.collect.outputs.act_now != 'true' && !inputs.dry_run
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: state
+          key: state-${{ github.run_id }}-${{ github.run_attempt }}
+
+  # One judge per owner, so one family member's watches never share a
+  # model context with the other's.
+  judge:
+    needs: collect
+    if: needs.collect.outputs.judges != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Holds CLAUDE_CODE_OAUTH_TOKEN and deploys from main only.
+    environment: agent
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        owner: ${{ fromJSON(needs.collect.outputs.judges) }}
+    env:
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
+      OWNER: ${{ matrix.owner }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+
+      - name: Download the input
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: judge-input
+          path: work
+
+      - name: Open the input
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+        run: node src/box.ts open "work/judge-$OWNER.sealed" work/judge-input.json && rm work/judge-*.sealed
+
+      # The action takes the prompt as text, not a file.
+      - name: Read the prompt
+        id: prompt
+        run: |
+          delim="PROMPT_$(openssl rand -hex 16)"
+          { echo "text<<$delim"; cat .github/agent/judge.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
+
+      # Default mode denies whatever the list does not allow, since nobody
+      # is there to ask; reads outside the checkout are blocked. This is the
+      # tool-level egress list of ADR-039 point 3: the talk job's Claude step
+      # must stay the same apart from its output file. Debug logging would
+      # print the whole conversation to the public log, so it is off here.
+      - name: Claude
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
+        env:
+          ACTIONS_STEP_DEBUG: 'false'
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: '{"permissions": {"blockReadsOutsideWorkingDirectories": true}}'
+          claude_args: >-
+            --model sonnet
+            --max-turns 30
+            --permission-mode default
+            --disallowedTools Bash
+            --allowedTools "Read,Glob,Grep,Edit(/work/verdicts.json),WebFetch(domain:www.hinnavaatlus.ee),WebFetch(domain:foorum.hinnavaatlus.ee)"
+
+      # The result's kind and API status only: its text could quote a listing.
+      - name: Why Claude failed
+        if: failure()
+        run: |
+          f="$RUNNER_TEMP/claude-execution-output.json"
+          [ -f "$f" ] || { echo "no execution file"; exit 0; }
+          jq -c '[.. | objects | select(.type? == "result")] | last | {subtype, api_error_status}' "$f"
+
+      - name: Seal the verdicts
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+        run: node src/box.ts seal work/verdicts.json "work/verdicts-$OWNER.sealed"
+
+      - name: Upload the verdicts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verdicts-${{ matrix.owner }}
+          path: work/verdicts-${{ matrix.owner }}.sealed
+          if-no-files-found: error
+          retention-days: 1
+
+  talk:
+    needs: collect
+    if: needs.collect.outputs.senders != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: agent
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        sender: ${{ fromJSON(needs.collect.outputs.senders) }}
+    env:
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
+      SENDER: ${{ matrix.sender }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+
+      - name: Download the input
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: talk-input
+          path: work
+
+      # Only this sender's messages and watches are opened; the others' sealed files go.
+      - name: Open the input
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+        run: node src/box.ts open "work/talk-$SENDER.sealed" "work/$SENDER/input.json" && rm work/talk-*.sealed
+
+      - name: Read the prompt
+        id: prompt
+        run: |
+          delim="PROMPT_$(openssl rand -hex 16)"
+          { echo "text<<$delim"; cat .github/agent/talk.md; echo; echo "Owner key: $SENDER"; echo "$delim"; } >> "$GITHUB_OUTPUT"
+
+      # The same as the judge job's Claude step apart from its output file.
+      - name: Claude
+        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
+        env:
+          ACTIONS_STEP_DEBUG: 'false'
+        with:
+          prompt: ${{ steps.prompt.outputs.text }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: '{"permissions": {"blockReadsOutsideWorkingDirectories": true}}'
+          claude_args: >-
+            --model sonnet
+            --max-turns 30
+            --permission-mode default
+            --disallowedTools Bash
+            --allowedTools "Read,Glob,Grep,Edit(/work/${{ matrix.sender }}/answers.json),WebFetch(domain:www.hinnavaatlus.ee),WebFetch(domain:foorum.hinnavaatlus.ee)"
+
+      - name: Why Claude failed
+        if: failure()
+        run: |
+          f="$RUNNER_TEMP/claude-execution-output.json"
+          [ -f "$f" ] || { echo "no execution file"; exit 0; }
+          jq -c '[.. | objects | select(.type? == "result")] | last | {subtype, api_error_status}' "$f"
+
+      - name: Seal the answers
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+        run: node src/box.ts seal "work/$SENDER/answers.json" "work/answers-$SENDER.sealed"
+
+      - name: Upload the answers
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: answers-${{ matrix.sender }}
+          path: work/answers-${{ matrix.sender }}.sealed
+          if-no-files-found: error
+          retention-days: 1
+
+  act:
+    needs: [collect, judge, talk]
+    # After judge and talk whatever their result: a failed model call still
+    # leaves commands to answer and candidates to count.
+    if: ${{ !cancelled() && needs.collect.result == 'success' && needs.collect.outputs.act_now == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: telegram
+    permissions:
+      contents: read
+    env:
+      # khe-homelab's scan tools: gitleaks and the workspace's personal-data rules, pinned there.
+      TOOLS_COMMIT: 2332a7b46a54d2c801ce5a1237885162426a1c75
+      TOOLS_SHA256: eb0ef0446344cf73718096d09240115d9962779e0d886bbbdbf70134efc48800
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+
+      - name: Download the state and act's input
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: collect
+          path: .
+
+      # On "Re-run failed jobs" the state act saved on the earlier attempt,
+      # with its record of what was sent, replaces collect's; such a re-run
+      # saves nothing, since later runs have moved the state on.
+      - name: Restore the state of an earlier attempt
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: state
+          key: state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: state-${{ github.run_id }}-
+
+      # An owner whose judge failed has no file; act counts the attempt.
+      - name: Download the verdicts
+        if: needs.judge.result != 'skipped'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: verdicts-*
+          merge-multiple: true
+          path: work
+
+      # A sender whose talk job failed has no file; act answers them with a note.
+      - name: Download the answers
+        if: needs.talk.result != 'skipped'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: answers-*
+          merge-multiple: true
+          path: work
+
+      # Needed only when a model ran; act fails closed without it.
+      - name: Scan tools
+        if: needs.judge.result != 'skipped' || needs.talk.result != 'skipped'
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/tools.sh" "https://raw.githubusercontent.com/khelias/khe-homelab/${TOOLS_COMMIT}/scripts/agent-digest-tools.sh"
+          echo "${TOOLS_SHA256}  $RUNNER_TEMP/tools.sh" | sha256sum -c -
+          bash "$RUNNER_TEMP/tools.sh" "$RUNNER_TEMP/tools"
+
+      - name: Act
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHATS: ${{ secrets.TELEGRAM_CHATS }}
+          WATCHES_WRITE_TOKEN: ${{ secrets.WATCHES_WRITE_TOKEN }}
+          GITLEAKS: ${{ runner.temp }}/tools/gitleaks
+          PII_RULES: ${{ (needs.judge.result != 'skipped' || needs.talk.result != 'skipped') && format('{0}/tools/pii-rules.toml', runner.temp) || '' }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          node src/act.ts "${args[@]}"
+
+      # Act records each send in the state before making it, so the state is
+      # kept even when act failed halfway.
+      - name: Save the state
+        if: ${{ !cancelled() && !inputs.dry_run && github.run_attempt == 1 && hashFiles('state/state.sealed') != '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: state
+          key: state-${{ github.run_id }}-${{ github.run_attempt }}
+
+  failed:
+    needs: [collect, judge, talk, act]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: telegram
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+
+      - name: Restore the state
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: state
+          key: state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: state-
+
+      - name: Alert the operator
+        env:
+          STATE_KEY: ${{ secrets.STATE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHATS: ${{ secrets.TELEGRAM_CHATS }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--failure "$RUN_URL")
+          if [ "$DRY_RUN" = true ]; then args+=(--dry-run); fi
+          node src/act.ts "${args[@]}"
+
+      - name: Save the state
+        if: ${{ !inputs.dry_run && github.run_attempt == 1 && hashFiles('state/state.sealed') != '' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: state
+          key: state-${{ github.run_id }}-${{ github.run_attempt }}-failed

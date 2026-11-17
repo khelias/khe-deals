@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "labels": ["dependencies"],
+  "timezone": "Europe/Tallinn",
+  "schedule": ["every weekend"],
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 5,
+  "pinDigests": true,
+  "packageRules": [
+    {
+      "description": "Nothing automerges: the deals workflow's jobs hold the bot, Claude and watch tokens, so every action and package update is merged by hand",
+      "matchPackageNames": ["*"],
+      "automerge": false
+    },
+    {
+      "description": "Major updates need manual review",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "labels": ["dependencies", "breaking"]
+    }
+  ]
+}
