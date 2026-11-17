@@ -128,6 +128,28 @@ export function parseFeed(xml: string): Item[] {
   return items.sort((a, b) => a.posted.localeCompare(b.posted));
 }
 
+export const TOPIC_TEXT_MAX = 8000;
+
+/**
+ * A topic page's posts as text, oldest first, each headed by its date and
+ * whether the topic's first poster wrote it; usernames are left out. Cut at
+ * `TOPIC_TEXT_MAX` characters.
+ */
+export function parseTopicPage(html: string): string {
+  let seller: string | undefined;
+  const posts: string[] = [];
+  for (const chunk of html.split('<span class="name"><a name="').slice(1)) {
+    const author = /class="name">([^<]*)<\/a>/.exec(chunk)?.[1] ?? '';
+    // The post's body is followed by its (usually empty) signature span.
+    const body = /<td colspan="2"><span class="postbody">([\s\S]*?)<span class="postbody">/.exec(chunk)?.[1];
+    if (body === undefined) continue;
+    seller ??= author;
+    const date = /<span class="postdetails">(\d\d\.\d\d\.\d{4} \d\d:\d\d)/.exec(chunk)?.[1] ?? '';
+    posts.push(`[${date}, ${author === seller ? 'seller' : 'someone else'}]\n${htmlToText(body)}`);
+  }
+  return posts.join('\n\n').slice(0, TOPIC_TEXT_MAX);
+}
+
 export function forumUrl(forum: number): string {
   return `https://${FORUM_HOST}/viewforum.php?f=${forum}`;
 }

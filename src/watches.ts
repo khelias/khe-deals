@@ -39,7 +39,8 @@ export interface LoadedWatch {
 }
 
 const REQUIRED = ['name', 'owner', 'active', 'forums', 'include', 'exclude', 'max_eur', 'bundles', 'brief'];
-const KEYS = new Set([...REQUIRED, 'reference_query']);
+/** Every key a watch file may hold. */
+export const KEYS = new Set([...REQUIRED, 'reference_query']);
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const SLUG_MAX = 40;
 const ID_RE = new RegExp(`^(${OWNERS.join('|')})-(${SLUG_RE.source.slice(1, -1)})$`);

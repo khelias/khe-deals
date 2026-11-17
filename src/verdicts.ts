@@ -6,6 +6,8 @@ import { SLUG_MAX, SLUG_RE, type Watch } from './watches.ts';
 export const MAX_MODEL_FILE = 64 * 1024;
 export const KINDS = ['ok', 'bait', 'junk', 'suspicious'] as const;
 export type Kind = (typeof KINDS)[number];
+export const CONFIDENCES = ['high', 'low'] as const;
+export const ACTIONS = ['create', 'update', 'delete'] as const;
 
 export interface Verdict {
   id: string;
@@ -16,7 +18,7 @@ export interface Verdict {
   rest_value_eur: number | null;
   effective_eur: number | null;
   kind: Kind;
-  confidence: 'high' | 'low';
+  confidence: (typeof CONFIDENCES)[number];
   reason_et: string;
 }
 
@@ -27,7 +29,7 @@ export interface Reply {
 
 export interface ProposalIn {
   update_id: number;
-  action: 'create' | 'update' | 'delete';
+  action: (typeof ACTIONS)[number];
   slug: string;
   fields: Partial<Watch>;
   summary_et: string;
@@ -65,7 +67,7 @@ export function checkVerdict(v: unknown): Verdict | string {
   if (!text(v.item, 200)) return 'item must be 1-200 characters';
   if (!money(v.asking_eur) || !money(v.rest_value_eur) || !money(v.effective_eur)) return 'prices must be numbers or null';
   if (!KINDS.includes(v.kind as Kind)) return `kind must be one of ${KINDS.join(', ')}`;
-  if (v.confidence !== 'high' && v.confidence !== 'low') return 'confidence must be high or low';
+  if (!CONFIDENCES.includes(v.confidence as Verdict['confidence'])) return 'confidence must be high or low';
   if (!text(v.reason_et, 200)) return 'reason_et must be 1-200 characters';
   return {
     id: v.id,
@@ -76,7 +78,7 @@ export function checkVerdict(v: unknown): Verdict | string {
     rest_value_eur: v.rest_value_eur,
     effective_eur: v.effective_eur,
     kind: v.kind as Kind,
-    confidence: v.confidence,
+    confidence: v.confidence as Verdict['confidence'],
     reason_et: v.reason_et,
   };
 }
@@ -97,12 +99,12 @@ export function checkReply(v: unknown): Reply | string {
 
 export function checkProposal(v: unknown): ProposalIn | string {
   if (!isObj(v) || !Number.isInteger(v.update_id)) return 'update_id missing';
-  if (v.action !== 'create' && v.action !== 'update' && v.action !== 'delete') return 'action must be create, update or delete';
+  if (!ACTIONS.includes(v.action as ProposalIn['action'])) return 'action must be create, update or delete';
   if (typeof v.slug !== 'string' || !SLUG_RE.test(v.slug) || v.slug.length > SLUG_MAX) return 'slug must be lowercase words joined by hyphens';
   if (!isObj(v.fields)) return 'fields must be an object';
   if ('owner' in v.fields) return 'fields must not set owner';
   if (!text(v.summary_et, 400)) return 'summary_et must be 1-400 characters';
-  return { update_id: v.update_id as number, action: v.action, slug: v.slug, fields: v.fields as Partial<Watch>, summary_et: v.summary_et };
+  return { update_id: v.update_id as number, action: v.action as ProposalIn['action'], slug: v.slug, fields: v.fields as Partial<Watch>, summary_et: v.summary_et };
 }
 
 /** A sender's file: `{"replies": [...], "proposals": [...]}`. */
@@ -113,3 +115,58 @@ export function parseAnswers(raw: string): { answers: Answers; errors: string[] 
   const answers = { replies: checkAll(value.replies, checkReply, 'reply', errors), proposals: checkAll(value.proposals, checkProposal, 'proposal', errors) };
   return { answers, errors };
 }
+
+// The same two files as JSON schemas for the API's structured outputs. They
+// give the shape only (the API takes no length or number limits); the checks
+// above stay the rule. A proposal's fields are optional and never null, so
+// act's spread of them into a watch carries only what the model set.
+const str = { type: 'string' };
+const num = { type: 'number' };
+const moneyOrNull = { anyOf: [num, { type: 'null' }] };
+const strings = { type: 'array', items: str };
+const closed = (properties: Record<string, unknown>, required = Object.keys(properties)) => ({ type: 'object', properties, required, additionalProperties: false });
+
+export const VERDICTS_SCHEMA = closed({
+  verdicts: {
+    type: 'array',
+    items: closed({
+      id: str,
+      watch: str,
+      fits: { type: 'boolean' },
+      item: str,
+      asking_eur: moneyOrNull,
+      rest_value_eur: moneyOrNull,
+      effective_eur: moneyOrNull,
+      kind: { type: 'string', enum: [...KINDS] },
+      confidence: { type: 'string', enum: [...CONFIDENCES] },
+      reason_et: str,
+    }),
+  },
+});
+
+export const ANSWERS_SCHEMA = closed({
+  replies: { type: 'array', items: closed({ update_id: { type: 'integer' }, text_et: str }) },
+  proposals: {
+    type: 'array',
+    items: closed({
+      update_id: { type: 'integer' },
+      action: { type: 'string', enum: [...ACTIONS] },
+      slug: str,
+      fields: closed(
+        {
+          name: str,
+          active: { type: 'boolean' },
+          forums: { type: 'array', items: { type: 'integer' } },
+          include: strings,
+          exclude: strings,
+          max_eur: num,
+          bundles: { type: 'boolean' },
+          reference_query: str,
+          brief: str,
+        },
+        [],
+      ),
+      summary_et: str,
+    }),
+  },
+});

@@ -7,10 +7,11 @@ import { appendFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { keyFromEnv, writeSealedJson } from './box.ts';
+import { httpText, limitedFetch } from './http.ts';
 import { safeError } from './log.ts';
 import { prefilter } from './prefilter.ts';
 import { FORUMS, hinnavaatlus, MAX_AGE_MS } from './sources/hinnavaatlus.ts';
-import { USER_AGENT, type Fetch, type Item, type ReferencePrice, type Source } from './sources/source.ts';
+import { type Fetch, type Item, type ReferencePrice, type Source } from './sources/source.ts';
 import { count, emptyState, loadState, recordPass, saveState, type State } from './state.ts';
 import { parseChats, telegramBot, toEvents, type RawUpdate, type Unknown } from './telegram.ts';
 import { isCollectHour, judgeSlot, overviewDue, weekOf } from './time.ts';
@@ -45,21 +46,6 @@ export interface CollectResult {
   judge: Partial<Record<Owner, JudgeInput>>;
   talk: TalkInput[];
   counts: { items: number; fresh: number; candidates: number };
-}
-
-/** A fetch that spaces requests and refuses more than `max`; `used` counts them. */
-export function limitedFetch(inner: Fetch, max: number, gapMs: number, sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))) {
-  let used = 0;
-  const f: Fetch & { used: () => number } = Object.assign(
-    async (url: string) => {
-      if (used >= max) throw new Error(`request cap of ${max} reached`);
-      if (used > 0) await sleep(gapMs);
-      used += 1;
-      return inner(url);
-    },
-    { used: () => used },
-  );
-  return f;
 }
 
 export async function runCollect(input: CollectInput): Promise<CollectResult> {
@@ -225,12 +211,6 @@ export function readData(root: string): { watches: LoadedWatch[]; feedback: Reco
   const months = existsSync(dir) ? readdirSync(dir).filter((f) => /^\d{4}-\d{2}\.jsonl$/.test(f)).sort().slice(-2) : [];
   const prices = months.flatMap((f) => readJsonl<PriceLine>(join(dir, f)));
   return { watches, feedback, prices };
-}
-
-export async function httpText(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { 'user-agent': USER_AGENT }, signal: AbortSignal.timeout(30_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${new URL(url).host}`);
-  return res.text();
 }
 
 /** `collected=false` outside collection hours, when no state was written. */

@@ -12,10 +12,12 @@ and four buttons; a plain sentence in the chat proposes a new search.
 The first search is desktop DDR5 memory for the homelab host, which at the
 current shortage is often cheaper inside a used PC than on its own.
 
-It is a family tool, not a product: Claude runs on our own subscription
-and nothing here is billed per call. The searches and everything the
-family writes stay private: the searches live in a private repo, and
-messages cross the workflow's jobs only encrypted
+It is a family tool, not a product: Claude runs on the monthly API
+credits our Claude plan includes, through a key with its own spend limit
+([estate ADR-040](https://github.com/khelias/khe-architecture/blob/main/decisions/040-deal-alerts-call-the-claude-api-on-the-plans-api-credits.md)).
+The searches and everything the family writes stay private: the searches
+live in a private repo, and messages cross the workflow's jobs only
+encrypted
 ([estate ADR-039](https://github.com/khelias/khe-architecture/blob/main/decisions/039-family-deal-alerts-are-an-unattended-job.md)).
 
 ## Run

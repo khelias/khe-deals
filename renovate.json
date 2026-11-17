@@ -9,7 +9,7 @@
   "pinDigests": true,
   "packageRules": [
     {
-      "description": "Nothing automerges: the deals workflow's jobs hold the bot, Claude and watch tokens, so every action and package update is merged by hand",
+      "description": "Nothing automerges: the deals workflow's jobs hold the bot and watch tokens and the Claude API key, so every action and package update is merged by hand",
       "matchPackageNames": ["*"],
       "automerge": false
     },

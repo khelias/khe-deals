@@ -1,7 +1,7 @@
 // What collect hands to the model jobs and to act, and where it lives.
 // Everything under work/ and state/ is sealed except the model jobs' own
-// plain input and output, which exist only inside their runner; their paths
-// are in deals.yml and the prompts.
+// plain input and output, which exist only inside their runner; deals.yml
+// opens and seals them at these paths too.
 import type { Alert, Candidate, Mark } from './state.ts';
 import type { ReferencePrice } from './sources/source.ts';
 import type { Event, Unknown } from './telegram.ts';
@@ -14,6 +14,10 @@ export const PATHS = {
   talk: (owner: Owner) => `work/talk-${owner}.sealed`,
   verdictsSealed: (owner: Owner) => `work/verdicts-${owner}.sealed`,
   answersSealed: (owner: Owner) => `work/answers-${owner}.sealed`,
+  judgeInput: 'work/judge-input.json',
+  verdicts: 'work/verdicts.json',
+  talkInput: (owner: Owner) => `work/${owner}/input.json`,
+  answers: (owner: Owner) => `work/${owner}/answers.json`,
 };
 
 export const BATCH = 40; // candidates per judge call

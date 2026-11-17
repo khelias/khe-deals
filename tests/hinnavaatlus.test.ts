@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { hasKeyword, prefilter } from '../src/prefilter.ts';
-import { decodeEntities, feedUrl, firstPicture, mergeForumPages, parseFeed, parseForumPage, parseReferencePrices } from '../src/sources/hinnavaatlus.ts';
+import { decodeEntities, feedUrl, firstPicture, mergeForumPages, parseFeed, parseForumPage, parseReferencePrices, parseTopicPage, TOPIC_TEXT_MAX } from '../src/sources/hinnavaatlus.ts';
 import { DDR5_WATCH, fixture } from './helpers.ts';
 
 const items = () => mergeForumPages(parseFeed(fixture('hinnavaatlus/feed.xml')), [parseForumPage(fixture('hinnavaatlus/forum-3.html'))]);
@@ -50,6 +50,19 @@ test('reference prices from the price search', () => {
   const prices = parseReferencePrices(fixture('hinnavaatlus/search.html'));
   assert.equal(prices.length, 3);
   assert.deepEqual(prices[0], { name: 'Mälu G.Skill DDR5 Flare X5 32GB (2x16GB) 6000 CL30', eur: 691.07 });
+});
+
+test('a topic page gives its posts as text, the seller marked and usernames left out', () => {
+  const text = parseTopicPage(fixture('hinnavaatlus/topic.html'));
+  const posts = text.split('\n\n[');
+  assert.equal(posts.length, 4);
+  assert.match(text, /^\[15\.11\.2026 20:18, seller\]\nMüüa heas korras/);
+  assert.match(text, /RTX 4070 Super MSI Ventus 2x OC AH 700\/ OK 750/);
+  assert.match(posts[1] ?? '', /^15\.11\.2026 20:46, someone else\]\n2\) 16GB ddr5/);
+  assert.match(posts[3] ?? '', /^17\.11\.2026 20:15, seller\]\n1\) ja 2\) müüdud$/);
+  assert.doesNotMatch(text, /myyja_test|ostja_yks|ostja_kaks|<|thumbs_up/);
+  const long = `<span class="name"><a name="1"></a><b><a class="name">x</a></b></span><td colspan="2"><span class="postbody">${'a '.repeat(6000)}</span><span class="postbody"></span>`;
+  assert.equal(parseTopicPage(long).length, TOPIC_TEXT_MAX);
 });
 
 test('keywords match at the start of a word', () => {

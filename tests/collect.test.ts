@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { limitedFetch, runCollect, type CollectInput } from '../src/collect.ts';
+import { runCollect, type CollectInput } from '../src/collect.ts';
+import { limitedFetch } from '../src/http.ts';
 import { forumUrl, hinnavaatlus, searchUrl } from '../src/sources/hinnavaatlus.ts';
 import type { Fetch, Source } from '../src/sources/source.ts';
 import { emptyState, type State } from '../src/state.ts';

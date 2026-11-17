@@ -5,6 +5,8 @@ Workspace-wide rules (push, review, docs, estate ADRs) are in [khe-workspace
 
 The family deal alerts: an unattended job in GitHub Actions under
 [estate ADR-039](https://github.com/khelias/khe-architecture/blob/main/decisions/039-family-deal-alerts-are-an-unattended-job.md),
+with its model calls under
+[estate ADR-040](https://github.com/khelias/khe-architecture/blob/main/decisions/040-deal-alerts-call-the-claude-api-on-the-plans-api-credits.md),
 inside
 [estate ADR-027](https://github.com/khelias/khe-architecture/blob/main/decisions/027-attended-and-unattended-agent-tiers.md)
 points 4-6. It is a writer in the register (estate ADR-007); its envelope
@@ -27,9 +29,12 @@ and fallback are in ADR-039 and in the header of `deals.yml`.
   proposals, open `work/act.sealed`, add events and `talkSenders`, and seal
   it again. `TELEGRAM_CHATS` is needed by act, dry run included;
   `PII_RULES` (the workspace's `.claude/hooks/pii-rules.toml`) turns the
-  gitleaks scan on in a dry run. On agent-vm the sandbox allows the two
-  Hinnavaatlus hosts, and Node's `fetch` reaches them through the sandbox
-  proxy only with `NODE_USE_ENV_PROXY=1`.
+  gitleaks scan on in a dry run. `node src/agent.ts judge|talk <owner>`
+  with `ANTHROPIC_API_KEY` set runs a model job on an opened input
+  (`work/judge-input.json`, `work/<owner>/input.json`) and spends credits.
+  On agent-vm the sandbox allows the two Hinnavaatlus hosts, and Node's
+  `fetch` reaches them through the sandbox proxy only with
+  `NODE_USE_ENV_PROXY=1`.
 
 ## Code
 
@@ -46,13 +51,19 @@ TypeScript below 6.1.
   proposals, button presses, the weekly overview, price and feedback
   lines in khe-deals-watches, the failure alert. Every text it sends is in
   `src/messages.ts`.
-- `src/verdicts.ts`: the schemas of the two model files; `src/scan.ts`
+- `src/agent.ts`: the judge and talk jobs' tool loop on the Claude API
+  (model, caps, the `fetch_page` allowlist); `src/claude.ts`: the
+  streamed Messages API client with its retries; `src/http.ts`: the
+  spaced, capped fetch both the collector and `fetch_page` use.
+- `src/verdicts.ts`: the schemas of the two model files, as checks and as
+  the JSON schemas sent for structured output; `src/scan.ts`
   strips links off the two Hinnavaatlus hosts and runs gitleaks.
 - `src/state.ts` (capped lists), `src/box.ts` (AES-256-GCM sealing),
   `src/time.ts` (Tallinn hours, judge slots, the overview week),
   `src/watches.ts` (the watch schema), `src/work.ts` (what passes between
   jobs).
-- `.github/agent/judge.md` and `talk.md`: the prompts.
+- `.github/agent/judge.md` and `talk.md`: the prompts, sent as the
+  system prompt.
 
 A source is a module behind `Source` in `src/sources/source.ts`; a new one
 joins only with its own terms and robots check, recorded in its plan
@@ -72,10 +83,13 @@ collection hours (06-23 Tallinn) and the judge slots (the first run from
   `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHATS`, `STATE_KEY`): restores the newest
   `state-*` cache entry, reads, and saves the state itself when nothing
   else runs.
-- `judge` and `talk` (environment `agent`: `CLAUDE_CODE_OAUTH_TOKEN`,
-  `STATE_KEY`): Claude with no Bash, edits to its one output file, fetches
-  to the two Hinnavaatlus hosts and debug logging off (it would print the
-  conversation). Both run once per owner and open only that owner's input,
+- `judge` and `talk` (environment `agent`: `ANTHROPIC_API_KEY`,
+  `STATE_KEY`): `src/agent.ts` calls the Claude API with the opened input
+  in the request and one tool, `fetch_page`, which our code runs only for
+  a forum topic linked in that input or the hinnavaatlus.ee price search;
+  no GitHub token, the key only in that step. A model that fails writes no
+  file, so the job fails and act counts it. Both run once per owner, the
+  judges one at a time, and open only that owner's input,
   so one family member's watches and messages never share a model context
   with the other's; act counts a judge's verdicts only on its own owner's
   watches.
@@ -106,15 +120,22 @@ seeds the state (everything seen, nothing alerted).
 - **Tokens expire:** the two fine-grained watch tokens have an expiry date
   in the operator's calendar; when one lapses, collect or act fails and the
   failure alert arrives. Make a new token with the same scope and replace
-  the secret. The Claude token from `claude setup-token` is revoked in
-  claude.ai settings.
+  the secret.
+- **The Claude API key** belongs to the `khe-deals` workspace of the
+  Console organization that receives the plan's monthly API credits; the
+  workspace's monthly spend limit caps the bot, and its Cost page shows
+  what the jobs spend (each job also logs its token counts). A leaked key
+  is revoked there and a new one set as `ANTHROPIC_API_KEY` in the `agent`
+  environment. When the credits or the limit run out, the judge and talk
+  jobs fail with `credits` or `limit` in their log line until the next
+  credits or month.
 - **Renovate** opens pull requests and merges nothing itself: the
-  workflow's jobs hold the bot, Claude and watch tokens, so an action
-  update is read and merged by hand like any workflow diff.
+  workflow's jobs hold the bot and watch tokens and the Claude API key,
+  so an action update is read and merged by hand like any workflow diff.
 - **The 60-day rule:** GitHub disables a public repo's schedule after 60
   days without activity, and emails the owner first. Merging Renovate's
   pull requests keeps it active; if it stops anyway, enable the workflow
   again in the Actions tab.
 - **Fallback:** disable the workflow; revoke the bot in BotFather, the
-  Claude token and both watch tokens; revert watch commits in
-  khe-deals-watches.
+  Claude API key in its Console workspace and both watch tokens; revert
+  watch commits in khe-deals-watches.

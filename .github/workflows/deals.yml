@@ -2,14 +2,16 @@ name: Deals
 
 # The unattended job of estate ADR-039, inside ADR-027 points 4-6.
 # collect (no model) reads Telegram and the forum and decides what runs;
-# judge and talk run Claude with a read-only token, no Bash, file edits to
-# their one output file and fetches only to the two Hinnavaatlus hosts;
+# judge and talk call the Claude API from src/agent.ts (estate ADR-040),
+# with no GitHub token and one tool our code runs, fetch_page, limited to
+# forum topics linked in their input and the hinnavaatlus.ee price search;
 # act (no model) checks their files and makes every write. What the family
 # wrote crosses jobs sealed with STATE_KEY, and no step prints it.
 # Action pins as in khe-homelab's weekly-digest.yml. No job installs
 # packages: the code runs on Node 24 alone.
 # Fallback: disable this workflow; revoke the bot (BotFather), the Claude
-# token and both watch tokens; revert watch commits in khe-deals-watches.
+# API key (its Console workspace) and both watch tokens; revert watch
+# commits in khe-deals-watches.
 
 on:
   schedule:
@@ -122,17 +124,18 @@ jobs:
     needs: collect
     if: needs.collect.outputs.judges != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Holds CLAUDE_CODE_OAUTH_TOKEN and deploys from main only.
+    timeout-minutes: 25
+    # Holds ANTHROPIC_API_KEY and deploys from main only.
     environment: agent
     permissions:
       contents: read
     strategy:
       fail-fast: false
+      # One at a time, so two large requests do not share a minute's rate limit.
+      max-parallel: 1
       matrix:
         owner: ${{ fromJSON(needs.collect.outputs.judges) }}
     env:
-      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
       OWNER: ${{ matrix.owner }}
 
     steps:
@@ -157,41 +160,14 @@ jobs:
           STATE_KEY: ${{ secrets.STATE_KEY }}
         run: node src/box.ts open "work/judge-$OWNER.sealed" work/judge-input.json && rm work/judge-*.sealed
 
-      # The action takes the prompt as text, not a file.
-      - name: Read the prompt
-        id: prompt
-        run: |
-          delim="PROMPT_$(openssl rand -hex 16)"
-          { echo "text<<$delim"; cat .github/agent/judge.md; echo "$delim"; } >> "$GITHUB_OUTPUT"
-
-      # Default mode denies whatever the list does not allow, since nobody
-      # is there to ask; reads outside the checkout are blocked. This is the
-      # tool-level egress list of ADR-039 point 3: the talk job's Claude step
-      # must stay the same apart from its output file. Debug logging would
-      # print the whole conversation to the public log, so it is off here.
+      # The key only in this step. src/agent.ts prints counts only, and
+      # writes no file when the model fails, so the next steps fail too and
+      # act counts the attempt.
       - name: Claude
-        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
+        timeout-minutes: 20
         env:
-          ACTIONS_STEP_DEBUG: 'false'
-        with:
-          prompt: ${{ steps.prompt.outputs.text }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          settings: '{"permissions": {"blockReadsOutsideWorkingDirectories": true}}'
-          claude_args: >-
-            --model sonnet
-            --max-turns 30
-            --permission-mode default
-            --disallowedTools Bash
-            --allowedTools "Read,Glob,Grep,Edit(/work/verdicts.json),WebFetch(domain:www.hinnavaatlus.ee),WebFetch(domain:foorum.hinnavaatlus.ee)"
-
-      # The result's kind and API status only: its text could quote a listing.
-      - name: Why Claude failed
-        if: failure()
-        run: |
-          f="$RUNNER_TEMP/claude-execution-output.json"
-          [ -f "$f" ] || { echo "no execution file"; exit 0; }
-          jq -c '[.. | objects | select(.type? == "result")] | last | {subtype, api_error_status}' "$f"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node src/agent.ts judge "$OWNER"
 
       - name: Seal the verdicts
         env:
@@ -210,7 +186,7 @@ jobs:
     needs: collect
     if: needs.collect.outputs.senders != '[]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     environment: agent
     permissions:
       contents: read
@@ -219,7 +195,6 @@ jobs:
       matrix:
         sender: ${{ fromJSON(needs.collect.outputs.senders) }}
     env:
-      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'
       SENDER: ${{ matrix.sender }}
 
     steps:
@@ -245,35 +220,11 @@ jobs:
           STATE_KEY: ${{ secrets.STATE_KEY }}
         run: node src/box.ts open "work/talk-$SENDER.sealed" "work/$SENDER/input.json" && rm work/talk-*.sealed
 
-      - name: Read the prompt
-        id: prompt
-        run: |
-          delim="PROMPT_$(openssl rand -hex 16)"
-          { echo "text<<$delim"; cat .github/agent/talk.md; echo; echo "Owner key: $SENDER"; echo "$delim"; } >> "$GITHUB_OUTPUT"
-
-      # The same as the judge job's Claude step apart from its output file.
       - name: Claude
-        uses: anthropics/claude-code-action@f3b070c88125d33dbae5653df5f143101d4ea9dc # v1.0.276
+        timeout-minutes: 20
         env:
-          ACTIONS_STEP_DEBUG: 'false'
-        with:
-          prompt: ${{ steps.prompt.outputs.text }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          settings: '{"permissions": {"blockReadsOutsideWorkingDirectories": true}}'
-          claude_args: >-
-            --model sonnet
-            --max-turns 30
-            --permission-mode default
-            --disallowedTools Bash
-            --allowedTools "Read,Glob,Grep,Edit(/work/${{ matrix.sender }}/answers.json),WebFetch(domain:www.hinnavaatlus.ee),WebFetch(domain:foorum.hinnavaatlus.ee)"
-
-      - name: Why Claude failed
-        if: failure()
-        run: |
-          f="$RUNNER_TEMP/claude-execution-output.json"
-          [ -f "$f" ] || { echo "no execution file"; exit 0; }
-          jq -c '[.. | objects | select(.type? == "result")] | last | {subtype, api_error_status}' "$f"
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node src/agent.ts talk "$SENDER"
 
       - name: Seal the answers
         env:
