@@ -1,4 +1,4 @@
-// The two model jobs, judge and talk, on the Claude API (estate ADR-040).
+// The two model jobs, judge and talk, on the Claude API (ADR-002).
 // The model reads its input in the request, may call one tool, fetch_page,
 // that this code runs against two fixed pages of the Hinnavaatlus hosts, and
 // answers with the job's JSON file, which act checks as before. Nothing here

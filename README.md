@@ -14,11 +14,11 @@ current shortage is often cheaper inside a used PC than on its own.
 
 It is a family tool, not a product: Claude runs on the monthly API
 credits our Claude plan includes, through a key with its own spend limit
-([estate ADR-040](https://github.com/khelias/khe-architecture/blob/main/decisions/040-deal-alerts-call-the-claude-api-on-the-plans-api-credits.md)).
+([ADR-002](docs/decisions/002-deal-alerts-call-the-claude-api-on-the-plans-api-credits.md)).
 The searches and everything the family writes stay private: the searches
 live in a private repo, and messages cross the workflow's jobs only
 encrypted
-([estate ADR-039](https://github.com/khelias/khe-architecture/blob/main/decisions/039-family-deal-alerts-are-an-unattended-job.md)).
+([ADR-001](docs/decisions/001-deal-alerts-are-an-unattended-job.md)).
 
 ## Run
 

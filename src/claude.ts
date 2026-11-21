@@ -1,4 +1,4 @@
-// The Claude Messages API over built-in fetch, streamed (estate ADR-040).
+// The Claude Messages API over built-in fetch, streamed (ADR-002 point 1).
 // A response's headers come at once, so a long answer never trips fetch's
 // 300-second header timeout. Every content block is kept as it came, so a
 // thinking block's signature, or a block type this reader does not know,

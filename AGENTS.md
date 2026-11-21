@@ -4,13 +4,14 @@ Workspace-wide rules (push, review, docs, estate ADRs) are in [khe-workspace
 `AGENTS.md`](https://github.com/khelias/khe-workspace/blob/main/AGENTS.md).
 
 The family deal alerts: an unattended job in GitHub Actions under
-[estate ADR-039](https://github.com/khelias/khe-architecture/blob/main/decisions/039-family-deal-alerts-are-an-unattended-job.md),
+[ADR-001](docs/decisions/001-deal-alerts-are-an-unattended-job.md),
 with its model calls under
-[estate ADR-040](https://github.com/khelias/khe-architecture/blob/main/decisions/040-deal-alerts-call-the-claude-api-on-the-plans-api-credits.md),
-inside
+[ADR-002](docs/decisions/002-deal-alerts-call-the-claude-api-on-the-plans-api-credits.md),
+this repo's decisions in `docs/decisions/`, inside
 [estate ADR-027](https://github.com/khelias/khe-architecture/blob/main/decisions/027-attended-and-unattended-agent-tiers.md)
 points 4-6. It is a writer in the register (estate ADR-007); its envelope
-and fallback are in ADR-039 and in the header of `deals.yml`.
+is ADR-001, and its fallback is under "Operating" below and in the header of
+`deals.yml`.
 
 ## Commands
 
@@ -67,7 +68,7 @@ TypeScript below 6.1.
 
 A source is a module behind `Source` in `src/sources/source.ts`; a new one
 joins only with its own terms and robots check, recorded in its plan
-(ADR-039 point 7). The Hinnavaatlus module reads the guest SmartFeed and
+(ADR-001 point 7). The Hinnavaatlus module reads the guest SmartFeed and
 the first list page of each forum with an unseen item, so a quiet run
 makes one request; the requests per run are capped at ten, two seconds
 apart, User-Agent `khe-deals/0.1`. The forum table (ids, names, what each

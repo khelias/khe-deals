@@ -1,5 +1,5 @@
 // Watch files in khe-deals-watches: `watches/<owner>-<slug>.json`. This is
-// the only check that repo has (estate ADR-039), run on every read and
+// the only check that repo has (ADR-001 point 5), run on every read and
 // before every write.
 //
 //   node src/watches.ts <dir>     validates every watch file in <dir>
