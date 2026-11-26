@@ -35,4 +35,7 @@ the local runs and the operating notes are in [`AGENTS.md`](AGENTS.md).
 GitHub Actions on GitHub-hosted runners, in this repo, on a schedule. The
 searches are in the private `khelias/khe-deals-watches`.
 
+The scheduled workflow has been paused since 2026-11-18 and stays off until
+its Claude API key is set.
+
 MIT licensed.
