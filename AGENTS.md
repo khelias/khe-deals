@@ -39,11 +39,13 @@ is ADR-001, and its fallback is under "Operating" below and in the header of
 
 ## Code
 
-TypeScript run by Node 24's type stripping: `erasableSyntaxOnly`, so no
+TypeScript run by Node 26's type stripping: `erasableSyntaxOnly`, so no
 enums, namespaces or parameter properties, and imports name the `.ts`
 file. No runtime dependencies (built-in `fetch`, `node:crypto`,
-`node:test`); TypeScript 6 currently, as typescript-eslint supports
-TypeScript below 6.1.
+`node:test`). TypeScript is two packages on purpose: `@typescript/native`
+(TS 7) supplies `tsc`, and `typescript` is aliased to
+`@typescript/typescript6` because typescript-eslint does not support TS 7
+yet, so a plain Renovate bump of `typescript` to 7 breaks lint.
 
 - `src/collect.ts`: the run every ten minutes, no model. Telegram
   updates, the forum (`src/sources/`), the keyword prefilter

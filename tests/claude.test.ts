@@ -5,7 +5,7 @@ import { API_VERSION, ApiError, createMessage, readStream } from '../src/claude.
 type Ev = [string, Record<string, unknown>];
 
 /** A response body of server-sent events, cut into small chunks so events split across reads. */
-function sse(events: Ev[]): ReadableStream<Uint8Array> {
+function sse(events: Ev[]): ReadableStream<Uint8Array<ArrayBuffer>> {
   const text = events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join('');
   const bytes = new TextEncoder().encode(text);
   return new ReadableStream({

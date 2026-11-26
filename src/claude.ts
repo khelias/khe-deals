@@ -60,7 +60,7 @@ export function mergeUsage(into: Usage, from: unknown, add = false): void {
 }
 
 /** Server-sent events of one response, as `[event, data]` pairs. */
-async function* events(body: ReadableStream<Uint8Array>): AsyncGenerator<[string, string]> {
+async function* events(body: ReadableStream<Uint8Array<ArrayBuffer>>): AsyncGenerator<[string, string]> {
   let buf = '';
   for await (const chunk of body.pipeThrough(new TextDecoderStream())) {
     buf += chunk.replace(/\r\n/g, '\n');
@@ -80,7 +80,7 @@ async function* events(body: ReadableStream<Uint8Array>): AsyncGenerator<[string
 }
 
 /** Folds one response's events into the final message. */
-export async function readStream(body: ReadableStream<Uint8Array>): Promise<Message> {
+export async function readStream(body: ReadableStream<Uint8Array<ArrayBuffer>>): Promise<Message> {
   let msg: Message | undefined;
   const json = new Map<number, string>();
   for await (const [event, data] of events(body)) {
