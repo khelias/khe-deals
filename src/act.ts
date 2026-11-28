@@ -181,7 +181,8 @@ async function commandText(run: Run, ev: CommandEvent): Promise<string> {
   const numbered = run.numbered.get(ev.owner) ?? [];
   const pick = (): LoadedWatch | string => {
     const n = Number(ev.arg);
-    if (!/^\d+$/.test(ev.arg) || n < 1 || n > numbered.length) return T.pickNumber(ev.command);
+    if (!/^\d+$/.test(ev.arg)) return T.pickNumber(ev.command);
+    if (n < 1 || n > numbered.length) return T.noSuchWatch;
     // The watch as it is now, after earlier commands in this run.
     return run.watches.get((numbered[n - 1] as LoadedWatch).id) ?? T.noSuchWatch;
   };

@@ -14,6 +14,11 @@ export type Owner = (typeof OWNERS)[number];
 /** The Hinnavaatlus sale forum ids a watch may read. */
 export const FORUMS: readonly number[] = SOURCE_FORUMS.map((f) => f.id);
 
+/** A forum's name as the forum shows it, or its id when the list does not have it. */
+export function forumName(id: number): string {
+  return SOURCE_FORUMS.find((f) => f.id === id)?.name ?? String(id);
+}
+
 export const MAX_WATCHES_PER_OWNER = 10;
 const MAX_KEYWORDS = 60;
 const KEYWORD_MIN = 2;

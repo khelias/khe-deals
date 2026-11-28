@@ -217,19 +217,21 @@ test('alerts go to the watch owner', async () => {
 
 test('each kind: ok and suspicious alert, junk and bait pass; low confidence is marked', async () => {
   const t = setup({
-    judged: [candidate('1'), candidate('2'), candidate('3'), candidate('4')],
+    judged: [candidate('1'), candidate('2'), candidate('3'), candidate('4'), candidate('5')],
     verdicts: [
       verdict('1', { confidence: 'low' }),
       verdict('2', { kind: 'suspicious', reason_et: 'Küsib ettemaksu.' }),
       verdict('3', { kind: 'junk', reason_et: 'Ostusoov.' }),
       verdict('4', { kind: 'bait', reason_et: 'Pood.' }),
+      verdict('5', { kind: 'suspicious', confidence: 'low', reason_et: 'Liiga odav.' }),
     ],
   });
   await t.run();
   const sent = texts(t.bot);
-  assert.equal(sent.length, 2);
-  assert.match(sent[0] as string, /^Ebakindel: M: Teema 1/);
+  assert.equal(sent.length, 3);
+  assert.match(sent[0] as string, /^Ebakindel hinnang: M: Teema 1/);
   assert.match(sent[1] as string, /^Kahtlane: M: Teema 2/);
+  assert.match(sent[2] as string, /^Kahtlane, ebakindel hinnang: M: Teema 5/);
   assert.deepEqual(t.state.passes[W]?.map((p) => p.code), ['junk', 'bait']);
 });
 
@@ -286,7 +288,7 @@ test('a candidate is dropped with a note after two failed judge runs', async () 
   const second = setup({ state: first.state, judged: [candidate('1', [W], { attempts: 1 })], verdicts: '{broken' });
   await second.run();
   assert.equal(second.state.pending.length, 0);
-  assert.match(texts(second.bot)[0] as string, /^Ei suutnud hinnata, jätsin kõrvale: M: Teema 1/);
+  assert.match(texts(second.bot)[0] as string, /^Ei suutnud seda kuulutust hinnata, vaata ise: M: Teema 1/);
   assert.equal(second.state.passes[W]?.[0]?.code, 'judge_failed');
 });
 
@@ -313,7 +315,7 @@ test('/peata, /jätka and /kustuta change only the sender\'s own watches', async
   await t.run();
   const s = texts(t.bot);
   assert.match(s[0] as string, /on peatatud/);
-  assert.match(s[1] as string, /Anna otsingu number/);
+  assert.match(s[1] as string, /Sellist otsingut ei ole/);
   assert.match(s[2] as string, /Anna otsingu number/);
   const saved = JSON.parse(t.repo.files.get(`watches/${W}.json`) ?? '{}') as Watch;
   assert.equal(saved.active, false);
@@ -371,7 +373,7 @@ test('/miks for each reason code, and not for another user\'s watch', async () =
     s[0],
     ['T0 - välistatud: ddr4, kui pole ddr5', 'T1 - ükski märksõna ei sobinud', 'T2 - üle piiri: 410 € > 300 €', 'T3 - ei sobi: SO-DIMM', 'T4 - pole see asi: ostusoov', 'T5 - edasimüüja: pood', 'T6 - hindamine ebaõnnestus'].join('\n'),
   );
-  assert.match(s[1] as string, /Anna otsingu number/);
+  assert.match(s[1] as string, /Sellist otsingut ei ole/);
   assert.equal(s[2], s[0]);
   for (const [code, detail] of codes) assert.ok(passText(code, detail).length > 0);
 });
@@ -381,7 +383,7 @@ test('a proposal is shown, /kinnita saves it, and an invalid one is refused', as
   const good = { update_id: 7, action: 'create', slug: 'beebikaru', fields: { name: 'Beebikäru', forums: [70], include: ['käru', 'vanker'], max_eur: 150, brief: 'Kasutatud beebikäru.' }, summary_et: 'Uus otsing beebikärule.' };
   const t = setup({ events: [text(7)], talkSenders: ['partner'], answers: { partner: JSON.stringify({ replies: [], proposals: [good] }) } });
   await t.run();
-  assert.match(texts(t.bot)[0] as string, /^Uus otsing beebikärule\.\n\nNimi: Beebikäru\nHind kuni: 150 €\nMärksõnad: käru, vanker\nFoorumid: 70\n/);
+  assert.match(texts(t.bot)[0] as string, /^Uus otsing beebikärule\.\n\nNimi: Beebikäru\nHind kuni: 150 €\nMärksõnad: käru, vanker\nFoorumid: Varia ja muu tehnika \(sh helitehnika ja fototehnika\) ost\/müük\/vahetus\n/);
   assert.match(texts(t.bot)[0] as string, /\/kinnita salvestab\.$/);
   assert.equal(t.bot.sent[0]?.opts?.replyTo, 47);
   assert.equal(t.state.proposals.partner?.id, 'partner-beebikaru');
@@ -504,4 +506,10 @@ test('the overview week boundary holds across a DST change', () => {
   assert.match(text, /Mediaan: küsitud 150 € \(nädal varem \?\), efektiivne 150 € \(\?\)\./);
   assert.ok(!text.includes('900'));
   assert.match(text, /Parim leid: x, 100 €\./);
+});
+
+test('the overview marks a paused watch', () => {
+  const state = emptyState();
+  const text = overviewText([loaded('operator-x', watch({ name: 'X', active: false }))], [], state, '2026-11-16');
+  assert.equal(text, ['Nädala ülevaade alates 16.11.', '', 'X (peatatud): nähtud 0, hinnatud 0, teavitusi 0.', 'Hindu sel nädalal ei olnud.'].join('\n'));
 });

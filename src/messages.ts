@@ -4,7 +4,7 @@ import type { Candidate, Mark, PassCode, State } from './state.ts';
 import type { Keyboard } from './telegram.ts';
 import { addDays, weekOf } from './time.ts';
 import type { Verdict } from './verdicts.ts';
-import { MAX_WATCHES_PER_OWNER, type LoadedWatch, type Watch } from './watches.ts';
+import { forumName, MAX_WATCHES_PER_OWNER, type LoadedWatch, type Watch } from './watches.ts';
 import type { PriceLine } from './work.ts';
 
 export const HELP = [
@@ -13,10 +13,10 @@ export const HELP = [
   'Kirjuta tavalise lausega, mida otsid ("otsi beebikäru alla 150 eur"), ja ma pakun välja uue otsingu. Vasta teatele küsimusega ("kas tasub?"), ja ma vastan selle kuulutuse kohta.',
   '',
   '/otsingud - sinu otsingud numbritega',
-  '/peata <n>, /jätka <n> - peatab või jätkab otsingu',
-  '/kustuta <n> - kustutab otsingu',
+  '/peata 1, /jätka 1 - peatab või jätkab otsingu 1',
+  '/kustuta 1 - kustutab otsingu 1',
   '/kinnita - salvestab viimase väljapakutud otsingu',
-  '/miks [n] - viimased kümme kuulutust, mille otsing kõrvale jättis, ja miks',
+  '/miks - viimased kümme kuulutust, mille otsingud kõrvale jätsid, ja miks; /miks 1 ainult otsingu 1 omad',
   '/abi - see tekst',
   '',
   'Vastan umbes kümne minuti jooksul.',
@@ -42,7 +42,7 @@ export const T = {
   already: (name: string, active: boolean) => `Otsing "${name}" on juba ${active ? 'käimas' : 'peatatud'}.`,
   switched: (name: string, active: boolean) => `Otsing "${name}" on ${active ? 'jälle käimas' : 'peatatud'}.`,
   bought: (name: string, n: number) => `Otsing "${name}" on peatatud. /jätka ${n} paneb selle uuesti käima.`,
-  dropped: (c: Candidate) => `Ei suutnud hinnata, jätsin kõrvale: ${c.title}\n${c.url}`,
+  dropped: (c: Candidate) => `Ei suutnud seda kuulutust hinnata, vaata ise: ${c.title}\n${c.url}`,
   unknownUser: (name: string, id: string) => `Botile kirjutas tundmatu kasutaja ${name || '(nimeta)'}, id ${id}. Lubamiseks lisa see id TELEGRAM_CHATS-i.`,
   failure: (runUrl: string) => `khe-deals: töö ebaõnnestus. ${runUrl}`,
 };
@@ -83,14 +83,18 @@ export function passText(code: PassCode, detail: string): string {
   }
 }
 
+const paused = (w: Watch) => (w.active ? '' : ' (peatatud)');
+
 export function watchList(list: LoadedWatch[]): string {
   if (!list.length) return T.noWatches;
-  return list.map((w, i) => `${i + 1}. ${w.watch.name}, kuni ${euro(w.watch.max_eur)}${w.watch.active ? '' : ' (peatatud)'}`).join('\n');
+  return list.map((w, i) => `${i + 1}. ${w.watch.name}, kuni ${euro(w.watch.max_eur)}${paused(w.watch)}`).join('\n');
 }
 
 /** An alert's text; `item` and `reason` are the cleaned model texts, `effective` the price act computed. */
 export function alertText(c: Candidate, w: Watch, v: Verdict, effective: number | null, item: string, reason: string): string {
-  const prefix = [v.kind === 'suspicious' ? 'Kahtlane' : '', v.confidence === 'low' ? 'Ebakindel' : ''].filter(Boolean).join(', ');
+  const suspicious = v.kind === 'suspicious';
+  const unsure = v.confidence === 'low';
+  const prefix = suspicious ? (unsure ? 'Kahtlane, ebakindel hinnang' : 'Kahtlane') : unsure ? 'Ebakindel hinnang' : '';
   let price = 'Hind puudub';
   if (v.asking_eur !== null) {
     price = `Hind ${euro(v.asking_eur)}`;
@@ -107,7 +111,7 @@ export function proposalText(summary: string, watch: Watch | null, deleting?: Wa
       `Hind kuni: ${euro(watch.max_eur)}${watch.bundles ? ' (ka komplekti sees, ülejäänu müüdav)' : ''}`,
       `Märksõnad: ${watch.include.join(', ')}`,
       ...(watch.exclude.length ? [`Välja jäetud: ${watch.exclude.join(', ')}`] : []),
-      `Foorumid: ${watch.forums.join(', ')}`,
+      `Foorumid: ${watch.forums.map(forumName).join('; ')}`,
       `Kirjeldus: ${watch.brief}`,
     );
   } else {
@@ -141,7 +145,7 @@ export function overviewText(list: LoadedWatch[], prices: PriceLine[], state: St
     const inWeek = (wk: string) => mine.filter((p) => weekOf(new Date(p.date)) === wk);
     const now = inWeek(week);
     const before = inWeek(prev);
-    lines.push('', `${w.watch.name}: nähtud ${c.seen}, hinnatud ${c.judged}, teavitusi ${c.alerted}.`);
+    lines.push('', `${w.watch.name}${paused(w.watch)}: nähtud ${c.seen}, hinnatud ${c.judged}, teavitusi ${c.alerted}.`);
     if (!nums(now, 'asking_eur').length) {
       lines.push('Hindu sel nädalal ei olnud.');
       continue;
